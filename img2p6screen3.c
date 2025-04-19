@@ -1,3 +1,22 @@
+/*
+ * img2p6screen3.c
+ * 256x192 の画像を PC-6001 (初代) SCREEN 3 の VRAM形式に変換する
+ * （アトリビュート領域データは含まない）
+ *
+ * 減色はRGBの差の少ない最近傍選択
+ * 横長2ドットの平均値を使用（偶数ドット参照のほうがよい？）
+ *
+ * PC6001VX での使い方
+ * (1) `img2p6screen3 -c 1 [イメージデータ] p6.bin` で VRAMデータ作成
+ *     （color,,2 の 白・シアン・マゼンタ・橙 のカラーの場合は `-c 2` を指定）
+ * (2) How Many Pages? は 2 を選択
+ * (3) `screen 3,2,2:color ,,1` または `screen 3,2,2:color ,,2` で VRAM初期化
+ * (4) PAGE DOWN (PC-6001 PAGEキー相当) を押してグラフィック画面表示
+ * (5) F6 を押してデバッガに入る
+ * (6) `loadmem p6.bin 0xe200 0xf9ff` として作成した VRAMデータをロード
+ * (7) F6 を押してデバッガから戻る
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
