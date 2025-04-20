@@ -44,24 +44,30 @@ const char progname[] = "img2p6screen3";
 
 /* 固定の4色パレット（PC-6001 SCREEN 3） */
 typedef struct {
-    uint8_t colors[4][3];
-} p6palettedef;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} palrgb_t;
 
-static const p6palettedef p6palette[2] = {
+typedef struct {
+    palrgb_t colors[4];
+} p6palette_t;
+
+static const p6palette_t p6palette[2] = {
     {
         {
-            {   0, 255,   0 }, // 緑
-            { 255, 255,   0 }, // 黄
-            {   0,   0, 255 }, // 青
-            { 255,   0,   0 }, // 赤
+            { .r =   0, .g = 255, .b =   0 }, // 緑
+            { .r = 255, .g = 255, .b =   0 }, // 黄
+            { .r =   0, .g =   0, .b = 255 }, // 青
+            { .r = 255, .g =   0, .b =   0 }, // 赤
         }
     },
     {
         {
-            { 255, 255, 255 }, // 白
-            {   0, 255, 255 }, // シアン
-            { 255,   0, 255 }, // マゼンタ
-            { 255, 128,   0 }, // 橙
+            { .r = 255, .g = 255, .b = 255 }, // 白
+            { .r =   0, .g = 255, .b = 255 }, // シアン
+            { .r = 255, .g =   0, .b = 255 }, // マゼンタ
+            { .r = 255, .g = 128, .b =   0 }, // 橙
         }
     }
 };
@@ -77,15 +83,15 @@ usage(void)
 
 /* 最近傍色インデックスを求める */
 static unsigned int
-nearest_color(const p6palettedef *palette, uint8_t r, uint8_t g, uint8_t b)
+nearest_color(const p6palette_t *palette, uint8_t r, uint8_t g, uint8_t b)
 {
     unsigned int min_dist = UINT_MAX;
     unsigned int index = 0;
     unsigned int i;
     for (i = 0; i < 4; ++i) {
-        int dr = (int)r - (int)palette->colors[i][0];
-        int dg = (int)g - (int)palette->colors[i][1];
-        int db = (int)b - (int)palette->colors[i][2];
+        int dr = (int)r - (int)palette->colors[i].r;
+        int dg = (int)g - (int)palette->colors[i].g;
+        int db = (int)b - (int)palette->colors[i].b;
         unsigned int dist = (dr * dr) + (dg * dg) + (db * db);
         if (dist < min_dist) {
             min_dist = dist;
@@ -103,7 +109,7 @@ main(int argc, char *argv[])
     int c, i, x, y, x_byte;
     uint8_t *img;
     const char *ifname, *ofname;
-    const p6palettedef *palette;
+    const p6palette_t *palette;
     FILE *ofp;
 
     while ((c = getopt(argc, argv, "c:")) != -1) {
