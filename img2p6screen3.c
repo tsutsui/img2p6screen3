@@ -137,7 +137,8 @@ main(int argc, char *argv[])
 
     img = stbi_load(ifname, &width, &height, &channels, 3); /* RGB固定 */
     if (img == NULL) {
-        fprintf(stderr, "画像を読み込めませんでした: %s\n", ifname);
+        fprintf(stderr, "画像を読み込めませんでした: %s (%s)\n",
+          ifname, stbi_failure_reason());
         goto out;
     }
 
