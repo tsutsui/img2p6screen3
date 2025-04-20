@@ -106,7 +106,7 @@ main(int argc, char *argv[])
 {
     int color_type = 1;
     int width, height, channels;
-    int c, i, x, y, x_byte;
+    int c, i, y, x_byte;
     uint8_t *img = NULL;
     const char *ifname, *ofname;
     const p6palette_t *palette;
