@@ -114,10 +114,11 @@ main(int argc, char *argv[])
     int status = EXIT_FAILURE;
 
     while ((c = getopt(argc, argv, "c:")) != -1) {
+        char *endptr;
         switch (c) {
         case 'c':
-            color_type = atoi(optarg);
-            if (color_type < 1 || color_type > 2) {
+            color_type = (int)strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || color_type < 1 || color_type > 2) {
                 usage();
             }
             break;
