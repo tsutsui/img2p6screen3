@@ -107,10 +107,11 @@ main(int argc, char *argv[])
     int color_type = 1;
     int width, height, channels;
     int c, i, x, y, x_byte;
-    uint8_t *img;
+    uint8_t *img = NULL;
     const char *ifname, *ofname;
     const p6palette_t *palette;
-    FILE *ofp;
+    FILE *ofp = NULL;
+    int status = EXIT_FAILURE;
 
     while ((c = getopt(argc, argv, "c:")) != -1) {
         switch (c) {
@@ -137,21 +138,19 @@ main(int argc, char *argv[])
     img = stbi_load(ifname, &width, &height, &channels, 3); /* RGB固定 */
     if (img == NULL) {
         fprintf(stderr, "画像を読み込めませんでした: %s\n", ifname);
-        exit(EXIT_FAILURE);
+        goto out;
     }
 
     if (width != IMG_XSIZE || height != IMG_YSIZE) {
         fprintf(stderr, "エラー: 入力画像のサイズは %dx%d である必要があります（入力画像サイズ: %dx%d）\n",
           IMG_XSIZE, IMG_YSIZE, width, height);
-        stbi_image_free(img);
-        exit(EXIT_FAILURE);
+        goto out;
     }
 
     ofp = fopen(ofname, "wb");
     if (ofp == NULL) {
         fprintf(stderr, "出力ファイルを開けませんでした: %s\n", ofname);
-        stbi_image_free(img);
-        exit(EXIT_FAILURE);
+        goto out;
     }
 
     /* 変換: 256x192 を 128x192 にリサイズ（横2ドットを1ドットに） */
@@ -169,11 +168,18 @@ main(int argc, char *argv[])
                 unsigned int color = nearest_color(palette, r, g, b);
                 out_byte |= (color & 0x03U) << ((3 - i) * 2);
             }
-            fwrite(&out_byte, 1, 1, ofp);
+            if (fwrite(&out_byte, 1, 1, ofp) != 1) {
+                fprintf(stderr, "出力ファイルの書き込みに失敗しました\n");
+                goto out;
+            }
         }
     }
+    status = EXIT_SUCCESS;
 
-    fclose(ofp);
-    stbi_image_free(img);
-    exit(EXIT_SUCCESS);
+ out:
+    if (ofp != NULL)
+        fclose(ofp);
+    if (img != NULL)
+        stbi_image_free(img);
+    exit(status);
 }
