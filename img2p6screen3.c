@@ -75,7 +75,9 @@ static const p6palette_t p6palette[2] = {
 static void
 usage(void)
 {
-    fprintf(stderr, "使い方: %s [-c 1|2] 入力画像ファイル 出力バイナリファイル\n", progname);
+    fprintf(stderr, "使い方: %s [-m 3|4] [-c 1|2] 入力画像ファイル 出力バイナリファイル\n", progname);
+    fprintf(stderr, "  -m 3    screen3 画像VRAM ※デフォルト\n");
+    fprintf(stderr, "  -m 4    screen4 画像VRAM\n");
     fprintf(stderr, "  -c 1    color,,1 パレット（緑・黄・青・赤）※デフォルト\n");
     fprintf(stderr, "  -c 2    color,,2 パレット（白・シアン・マゼンタ・橙）\n");
     exit(EXIT_FAILURE);
@@ -101,9 +103,17 @@ nearest_color(const p6palette_t *palette, uint8_t r, uint8_t g, uint8_t b)
     return index;
 }
 
+static inline int
+rgb_to_gray(int r, int g, int b)
+{
+
+    return (299 * r + 587 * g + 114 * b) / 1000;
+}
+
 int
 main(int argc, char *argv[])
 {
+    int mode = 3;
     int color_type = 1;
     int width, height, channels;
     int c, i, y, x_byte;
@@ -113,12 +123,18 @@ main(int argc, char *argv[])
     FILE *ofp = NULL;
     int status = EXIT_FAILURE;
 
-    while ((c = getopt(argc, argv, "c:")) != -1) {
+    while ((c = getopt(argc, argv, "c:m:")) != -1) {
         char *endptr;
         switch (c) {
         case 'c':
             color_type = (int)strtol(optarg, &endptr, 10);
             if (*endptr != '\0' || color_type < 1 || color_type > 2) {
+                usage();
+            }
+            break;
+        case 'm':
+            mode = (int)strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || (mode != 3 && mode != 4)) {
                 usage();
             }
             break;
@@ -155,24 +171,48 @@ main(int argc, char *argv[])
         goto out;
     }
 
-    /* 変換: 256x192 を 128x192 にリサイズ（横2ドットを1ドットに） */
-    for (y = 0; y < P6_YSIZE; y++) {
-        for (x_byte = 0; x_byte < P6_STRIDE; x_byte++) {
-            uint8_t out_byte = 0;
-            for (i = 0; i < 4; ++i) {
-                /* 2ドットを1ドットに平均化 */
-                int x = (x_byte * 4 + i) * 2;
-                int idx1 = (y * IMG_XSIZE + x) * 3;
-                int idx2 = (y * IMG_XSIZE + x + 1) * 3;
-                uint8_t r = (img[idx1 + 0] + img[idx2 + 0]) / 2;
-                uint8_t g = (img[idx1 + 1] + img[idx2 + 1]) / 2;
-                uint8_t b = (img[idx1 + 2] + img[idx2 + 2]) / 2;
-                unsigned int color = nearest_color(palette, r, g, b);
-                out_byte |= (color & 0x03U) << ((3 - i) * 2);
+    if (mode == 3) {
+        /* 変換: 256x192 を 128x192 にリサイズ（横2ドットを1ドットに） */
+        for (y = 0; y < P6_YSIZE; y++) {
+            for (x_byte = 0; x_byte < P6_STRIDE; x_byte++) {
+                uint8_t out_byte = 0;
+                for (i = 0; i < 4; ++i) {
+                    /* 2ドットを1ドットに平均化 */
+                    int x = (x_byte * 4 + i) * 2;
+                    int idx1 = (y * IMG_XSIZE + x) * 3;
+                    int idx2 = (y * IMG_XSIZE + x + 1) * 3;
+                    uint8_t r = (img[idx1 + 0] + img[idx2 + 0]) / 2;
+                    uint8_t g = (img[idx1 + 1] + img[idx2 + 1]) / 2;
+                    uint8_t b = (img[idx1 + 2] + img[idx2 + 2]) / 2;
+                    unsigned int color = nearest_color(palette, r, g, b);
+                    out_byte |= (color & 0x03U) << ((3 - i) * 2);
+                }
+                if (fwrite(&out_byte, 1, 1, ofp) != 1) {
+                    fprintf(stderr, "出力ファイルの書き込みに失敗しました\n");
+                    goto out;
+                }
             }
-            if (fwrite(&out_byte, 1, 1, ofp) != 1) {
-                fprintf(stderr, "出力ファイルの書き込みに失敗しました\n");
-                goto out;
+        }
+    } else if (mode == 4) {
+        for (y = 0; y < P6_YSIZE; y++) {
+            for (x_byte = 0; x_byte < P6_STRIDE; x_byte++) {
+                uint8_t out_byte = 0;
+                int bit;
+                for (bit = 0; bit < 8; bit++) {
+                    int x = x_byte * 8 + bit;
+                    int idx = (y * IMG_XSIZE + x) * 3;
+                    uint8_t r = img[idx + 0];
+                    uint8_t g = img[idx + 1];
+                    uint8_t b = img[idx + 2];
+                    uint8_t gray = rgb_to_gray(r, g, b);
+                    if (gray > 127) {
+                        out_byte |= 0x80U >> bit; 
+                    }
+                }
+                if (fwrite(&out_byte, 1, 1, ofp) != 1) {
+                    fprintf(stderr, "出力ファイルの書き込みに失敗しました\n");
+                    goto out;
+                }
             }
         }
     }
