@@ -33,12 +33,8 @@
 #define STBI_NO_LINEAR
 #include "stb_image.h"
 
-#define P6_XSIZE	128
-#define P6_YSIZE	192
-#define P6_STRIDE	(P6_XSIZE / 4)
-
-#define IMG_XSIZE	(P6_XSIZE * 2)
-#define IMG_YSIZE	P6_YSIZE
+#define IMG_XSIZE       256
+#define IMG_YSIZE       192
 
 const char progname[] = "img2p6screen3";
 
@@ -75,11 +71,13 @@ static const p6palette_t p6palette[2] = {
 static void
 usage(void)
 {
-    fprintf(stderr, "使い方: %s [-m 3|4] [-c 1|2] 入力画像ファイル 出力バイナリファイル\n", progname);
-    fprintf(stderr, "  -m 3    screen3 画像VRAM ※デフォルト\n");
-    fprintf(stderr, "  -m 4    screen4 画像VRAM\n");
-    fprintf(stderr, "  -c 1    color,,1 パレット（緑・黄・青・赤）※デフォルト\n");
-    fprintf(stderr, "  -c 2    color,,2 パレット（白・シアン・マゼンタ・橙）\n");
+    fprintf(stderr, "使い方: %s [-m 3|4] [-c 1|2] [-x xsize] [-y ysize] 入力画像ファイル 出力バイナリファイル\n", progname);
+    fprintf(stderr, "  -m 3     screen3 画像VRAM ※デフォルト\n");
+    fprintf(stderr, "  -m 4     screen4 画像VRAM\n");
+    fprintf(stderr, "  -c 1     color,,1 パレット（緑・黄・青・赤）※デフォルト\n");
+    fprintf(stderr, "  -c 2     color,,2 パレット（白・シアン・マゼンタ・橙）\n");
+    fprintf(stderr, "  -x xsize 画像の横サイズ xsize ドットのデータを作成\n");
+    fprintf(stderr, "  -y ysize 画像の縦サイズ ysize ドットのデータを作成\n");
     exit(EXIT_FAILURE);
 }
 
@@ -115,6 +113,9 @@ main(int argc, char *argv[])
 {
     int mode = 3;
     int color_type = 1;
+    int img_xsize = IMG_XSIZE;
+    int img_ysize = IMG_YSIZE;
+    int img_stride;
     int width, height, channels;
     int c, i, y, x_byte;
     uint8_t *img = NULL;
@@ -123,7 +124,7 @@ main(int argc, char *argv[])
     FILE *ofp = NULL;
     int status = EXIT_FAILURE;
 
-    while ((c = getopt(argc, argv, "c:m:")) != -1) {
+    while ((c = getopt(argc, argv, "c:m:x:y:")) != -1) {
         char *endptr;
         switch (c) {
         case 'c':
@@ -135,6 +136,18 @@ main(int argc, char *argv[])
         case 'm':
             mode = (int)strtol(optarg, &endptr, 10);
             if (*endptr != '\0' || (mode != 3 && mode != 4)) {
+                usage();
+            }
+            break;
+        case 'x':
+            img_xsize = (int)strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || img_xsize < 1 || img_xsize > IMG_XSIZE) {
+                usage();
+            }
+            break;
+        case 'y':
+            img_ysize = (int)strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || img_ysize < 1 || img_ysize > IMG_YSIZE) {
                 usage();
             }
             break;
@@ -159,9 +172,9 @@ main(int argc, char *argv[])
         goto out;
     }
 
-    if (width != IMG_XSIZE || height != IMG_YSIZE) {
+    if (width != img_xsize || height != img_ysize) {
         fprintf(stderr, "エラー: 入力画像のサイズは %dx%d である必要があります（入力画像サイズ: %dx%d）\n",
-          IMG_XSIZE, IMG_YSIZE, width, height);
+          img_xsize, img_ysize, width, height);
         goto out;
     }
 
@@ -172,15 +185,16 @@ main(int argc, char *argv[])
     }
 
     if (mode == 3) {
-        /* 変換: 256x192 を 128x192 にリサイズ（横2ドットを1ドットに） */
-        for (y = 0; y < P6_YSIZE; y++) {
-            for (x_byte = 0; x_byte < P6_STRIDE; x_byte++) {
+        /* 元画像横2ドットをP6画像1ドットにして 1バイトあたり4ドット */
+        img_stride = (((img_xsize / 2) + 3) / 4);
+        for (y = 0; y < img_ysize; y++) {
+            for (x_byte = 0; x_byte < img_stride; x_byte++) {
                 uint8_t out_byte = 0;
                 for (i = 0; i < 4; ++i) {
                     /* 2ドットを1ドットに平均化 */
                     int x = (x_byte * 4 + i) * 2;
-                    int idx1 = (y * IMG_XSIZE + x) * 3;
-                    int idx2 = (y * IMG_XSIZE + x + 1) * 3;
+                    int idx1 = (y * img_xsize + x) * 3;
+                    int idx2 = (y * img_xsize + x + 1) * 3;
                     uint8_t r = (img[idx1 + 0] + img[idx2 + 0]) / 2;
                     uint8_t g = (img[idx1 + 1] + img[idx2 + 1]) / 2;
                     uint8_t b = (img[idx1 + 2] + img[idx2 + 2]) / 2;
@@ -194,13 +208,15 @@ main(int argc, char *argv[])
             }
         }
     } else if (mode == 4) {
-        for (y = 0; y < P6_YSIZE; y++) {
-            for (x_byte = 0; x_byte < P6_STRIDE; x_byte++) {
+        /* 1バイトあたり8ドット */
+        img_stride = ((img_xsize + 7) / 8);
+        for (y = 0; y < img_ysize; y++) {
+            for (x_byte = 0; x_byte < img_stride; x_byte++) {
                 uint8_t out_byte = 0;
                 int bit;
                 for (bit = 0; bit < 8; bit++) {
                     int x = x_byte * 8 + bit;
-                    int idx = (y * IMG_XSIZE + x) * 3;
+                    int idx = (y * img_xsize + x) * 3;
                     uint8_t r = img[idx + 0];
                     uint8_t g = img[idx + 1];
                     uint8_t b = img[idx + 2];
